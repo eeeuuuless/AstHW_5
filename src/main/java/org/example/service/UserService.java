@@ -2,19 +2,26 @@ package org.example.service;
 
 import org.example.dto.UserDTO;
 import org.example.entity.User;
+import org.example.notification.UserNotification;
 import org.example.repository.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
 @Service
 public class UserService {
+    private final UserRepository userRepository;
 
     @Autowired
-    private UserRepository userRepository;
+    private KafkaTemplate<String, UserNotification> kafkaTemplate;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
 
     private UserDTO convertToDTO(User user) {
         UserDTO userDTO = new UserDTO();
@@ -24,6 +31,7 @@ public class UserService {
         userDTO.setAge(user.getAge());
         userDTO.setCreatedAt(user.getCreatedAt());
         return userDTO;
+
     };
 
     public UserDTO createUser( UserDTO userDTO) {
@@ -33,6 +41,12 @@ public class UserService {
         user.setEmail(userDTO.getEmail());
 
         User savedUser = userRepository.save(user);
+
+        UserNotification userNotification = new UserNotification();
+        userNotification.setEmail(savedUser.getEmail());
+        userNotification.setOperation("create");
+        kafkaTemplate.send("notification", userNotification);
+
         return convertToDTO(savedUser);
     }
 
@@ -61,6 +75,10 @@ public class UserService {
         return null;
     }
     public void deleteUser(long id) {
-        userRepository.deleteById(id);
+            userRepository.deleteById(id);
+
+            UserNotification userNotification = new UserNotification();
+            userNotification.setOperation("deleted");
+            kafkaTemplate.send("notification", userNotification);
     }
 }
